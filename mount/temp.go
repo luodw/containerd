@@ -48,20 +48,26 @@ func WithTempMount(ctx context.Context, mounts []Mount, f func(root string) erro
 		}
 	}()
 
-	// We should do defer first, if not we will not do Unmount when only a part of Mounts are failed.
-	defer func() {
-		if uerr = UnmountAll(root, 0); uerr != nil {
-			uerr = errors.Wrapf(uerr, "failed to unmount %s", root)
-			if err == nil {
-				err = uerr
-			} else {
-				err = errors.Wrap(err, uerr.Error())
-			}
+	for _, m := range mounts {
+		if m.Type == "nydus" {
+			continue
 		}
-	}()
-	if uerr = All(mounts, root); uerr != nil {
-		return errors.Wrapf(uerr, "failed to mount %s", root)
+		// We should do defer first, if not we will not do Unmount when only a part of Mounts are failed.
+		defer func() {
+			if uerr = UnmountAll(root, 0); uerr != nil {
+				uerr = errors.Wrapf(uerr, "failed to unmount %s", root)
+				if err == nil {
+					err = uerr
+				} else {
+					err = errors.Wrap(err, uerr.Error())
+				}
+			}
+		}()
+		if uerr = All(mounts, root); uerr != nil {
+			return errors.Wrapf(uerr, "failed to mount %s", root)
+		}
 	}
+
 	return errors.Wrapf(f(root), "mount callback failed on %s", root)
 }
 

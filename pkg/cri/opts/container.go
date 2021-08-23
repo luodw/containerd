@@ -18,6 +18,7 @@ package opts
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -76,18 +77,26 @@ func WithVolumes(volumeMounts map[string]string) containerd.NewContainerOpts {
 		// refer to https://github.com/containerd/containerd/pull/1868
 		// https://github.com/containerd/containerd/pull/1785
 		defer os.Remove(root) // nolint: errcheck
-		if err := mount.All(mounts, root); err != nil {
-			return errors.Wrap(err, "failed to mount")
-		}
-		defer func() {
-			if uerr := mount.Unmount(root, 0); uerr != nil {
-				log.G(ctx).WithError(uerr).Errorf("Failed to unmount snapshot %q", c.SnapshotKey)
-				if err == nil {
-					err = uerr
-				}
+		fmt.Printf("mounts: %#v", mounts)
+		fmt.Printf("root: %#v", root)
+		for _, m := range mounts {
+			// if nydus, do not mount
+			if m.Type == "nydus" {
+				continue
 			}
-		}()
+			if err := mount.All(mounts, root); err != nil {
+				return errors.Wrap(err, "failed to mount")
+			}
 
+			defer func() {
+				if uerr := mount.Unmount(root, 0); uerr != nil {
+					log.G(ctx).WithError(uerr).Errorf("Failed to unmount snapshot %q", c.SnapshotKey)
+					if err == nil {
+						err = uerr
+					}
+				}
+			}()
+		}
 		for host, volume := range volumeMounts {
 			src := filepath.Join(root, volume)
 			if _, err := os.Stat(src); err != nil {
